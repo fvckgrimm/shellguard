@@ -90,9 +90,11 @@ func (a *AIConfig) APIKey() string {
 	if key != "" {
 		return key
 	}
-	// Also try OPENAI_API_KEY for openai provider
 	if strings.EqualFold(a.Provider, "openai") {
 		return os.Getenv("OPENAI_API_KEY")
+	}
+	if strings.EqualFold(a.Provider, "openrouter") {
+		return os.Getenv("OPENROUTER_API_KEY")
 	}
 	return ""
 }

@@ -42,7 +42,7 @@ type Client struct {
 
 func NewClient(opts ClientOptions) (*Client, error) {
 	if opts.APIKey == "" {
-		return nil, fmt.Errorf("no API key provided (set ANTHROPIC_API_KEY or OPENAI_API_KEY)")
+		return nil, fmt.Errorf("no API key provided (set ANTHROPIC_API_KEY, OPENAI_API_KEY, or OPENROUTER_API_KEY)")
 	}
 	if opts.Provider == "" {
 		opts.Provider = "anthropic"
@@ -51,6 +51,8 @@ func NewClient(opts ClientOptions) (*Client, error) {
 		switch opts.Provider {
 		case "openai":
 			opts.Model = "gpt-4o"
+		case "openrouter":
+			opts.Model = "mistralai/mistral-7b-instruct" // free tier default
 		default:
 			opts.Model = "claude-sonnet-4-20250514"
 		}
@@ -68,6 +70,8 @@ func (c *Client) Analyze(content string, findings []engine.Finding) (*Result, er
 	switch c.opts.Provider {
 	case "openai":
 		return c.analyzeOpenAI(content, findings)
+	case "openrouter":
+		return c.analyzeOpenRouter(content, findings)
 	default:
 		return c.analyzeAnthropic(content, findings)
 	}
@@ -291,7 +295,59 @@ func (c *Client) analyzeOpenAI(content string, findings []engine.Finding) (*Resu
 	return parseAIResult(or.Choices[0].Message.Content)
 }
 
-// ── Parser ────────────────────────────────────────────────────────────────────
+// ── OpenRouter ────────────────────────────────────────────────────────────────
+// OpenRouter is OpenAI API-compatible — same request shape, different base URL
+// and an extra HTTP-Referer header that OpenRouter uses for rate limiting.
+// Free models: mistralai/mistral-7b-instruct, meta-llama/llama-3-8b-instruct, etc.
+// See https://openrouter.ai/models for the full list including free-tier options.
+
+func (c *Client) analyzeOpenRouter(content string, findings []engine.Finding) (*Result, error) {
+	payload := openAIRequest{
+		Model: c.opts.Model,
+		Messages: []openAIMessage{
+			{Role: "system", Content: systemPrompt},
+			{Role: "user", Content: buildUserMessage(content, findings)},
+		},
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", "https://openrouter.ai/api/v1/chat/completions", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.opts.APIKey)
+	req.Header.Set("HTTP-Referer", "https://github.com/fvckgrimm/shellguard")
+	req.Header.Set("X-Title", "shellguard")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("OpenRouter request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var orResp openAIResponse
+	if err := json.Unmarshal(respBody, &orResp); err != nil {
+		return nil, fmt.Errorf("failed to parse OpenRouter response: %w", err)
+	}
+	if orResp.Error != nil {
+		return nil, fmt.Errorf("OpenRouter error: %s", orResp.Error.Message)
+	}
+	if len(orResp.Choices) == 0 {
+		return nil, fmt.Errorf("no response from OpenRouter")
+	}
+
+	return parseAIResult(orResp.Choices[0].Message.Content)
+}
 
 var jsonFenceRe = regexp.MustCompile("(?s)```(?:json)?\\s*(\\{.*?\\})\\s*```")
 
