@@ -254,11 +254,11 @@ func runScan(cmd *cobra.Command, args []string) error {
 			os.Stdout.Write(content)
 		}
 		// Log to audit trail
-		_ = cfg.AuditLog(sourceLabel, verdict, len(report.Findings), contentHash(content))
+		_ = cfg.AuditLog(sourceLabel, verdict.String(), len(report.Findings), contentHash(content))
 		os.Exit(0)
 	} else {
 		printer.Rejected()
-		_ = cfg.AuditLog(sourceLabel, verdict, len(report.Findings), contentHash(content))
+		_ = cfg.AuditLog(sourceLabel, verdict.String(), len(report.Findings), contentHash(content))
 		os.Exit(1)
 	}
 

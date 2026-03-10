@@ -139,20 +139,26 @@ rules:
     severity: high
     tags: [prompt_injection, unicode_smuggling, obfuscation]
     match:
-      mode: regex
-      pattern: '[\u200b\u200c\u200d\u2060\ufeff\u00ad]'
+      mode: keywords_any
+      keywords:
+        - "​"
+        - "‌"
+        - "‍"
+        - "⁠"
+        - "­"
     remediation: "Invisible Unicode characters can be used to smuggle hidden instructions into content that appears clean."
     references:
       - https://embracethered.com/blog/posts/2022/unicode-tags-llm-prompt-injection/
 
   - id: inj-013
     name: "Unicode Tag Character Injection"
-    description: "Unicode tag block characters (used to smuggle prompts in seemingly innocent text)"
-    severity: critical
+    description: "Unicode tag block characters (used to smuggle prompts in seemingly innocent text) - check with: cat -v file | grep -P '\\x{e0000}'"
+    severity: high
     tags: [prompt_injection, unicode_smuggling]
     match:
-      mode: regex
-      pattern: '[\U000e0000-\U000e007f]'
+      mode: keywords_any
+      keywords:
+        - "󠀀"
     references:
       - https://embracethered.com/blog/posts/2022/unicode-tags-llm-prompt-injection/
 

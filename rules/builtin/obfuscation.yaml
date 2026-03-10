@@ -128,7 +128,7 @@ rules:
     tags: [obfuscation, eval]
     match:
       mode: regex
-      pattern: 'python[23]?\s+-c\s+["\'].*exec.*compile'
+      pattern: "python[23]?\\s+-c\\s+[\"'].*exec.*compile"
       flags: [case_insensitive]
 
   - id: obf-013

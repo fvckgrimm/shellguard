@@ -100,34 +100,53 @@ func (a *AIConfig) APIKey() string {
 func (c *Config) RulePackDirs() []string {
 	var dirs []string
 
-	// 1. Built-in rules shipped with the binary
+	// 1. Built-in rules: explicit override in config
 	builtinDir := c.Rules.BuiltinDir
+
 	if builtinDir == "" {
-		// Try relative to binary, then XDG
-		exe, err := os.Executable()
-		if err == nil {
-			candidate := filepath.Join(filepath.Dir(exe), "rules")
+		// Try cwd/rules/builtin first — works for `go run` and dev
+		if cwd, err := os.Getwd(); err == nil {
+			candidate := filepath.Join(cwd, "rules", "builtin")
 			if _, err := os.Stat(candidate); err == nil {
 				builtinDir = candidate
 			}
 		}
-		if builtinDir == "" {
-			cfgDir, err := DefaultConfigDir()
-			if err == nil {
-				builtinDir = filepath.Join(cfgDir, "rules", "builtin")
+	}
+
+	if builtinDir == "" {
+		// Try next to the actual binary (installed)
+		if exe, err := os.Executable(); err == nil {
+			candidate := filepath.Join(filepath.Dir(exe), "rules", "builtin")
+			if _, err := os.Stat(candidate); err == nil {
+				builtinDir = candidate
 			}
 		}
 	}
+
+	if builtinDir == "" {
+		// Fall back to XDG config dir
+		if cfgDir, err := DefaultConfigDir(); err == nil {
+			builtinDir = filepath.Join(cfgDir, "rules", "builtin")
+		}
+	}
+
 	if builtinDir != "" {
 		dirs = append(dirs, builtinDir)
 	}
 
-	// 2. Custom user rule dirs
+	// 2. Community rules: cwd/rules/community for go run / dev
+	if cwd, err := os.Getwd(); err == nil {
+		candidate := filepath.Join(cwd, "rules", "community")
+		if _, err := os.Stat(candidate); err == nil {
+			dirs = append(dirs, candidate)
+		}
+	}
+
+	// 3. Custom user rule dirs from config
 	dirs = append(dirs, c.Rules.CustomDirs...)
 
-	// 3. XDG community packs dir
-	cfgDir, err := DefaultConfigDir()
-	if err == nil {
+	// 4. XDG community packs dir
+	if cfgDir, err := DefaultConfigDir(); err == nil {
 		communityDir := filepath.Join(cfgDir, "rules", "community")
 		if _, err := os.Stat(communityDir); err == nil {
 			dirs = append(dirs, communityDir)

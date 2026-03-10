@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 	"text/tabwriter"
@@ -117,7 +118,7 @@ func (p *Printer) Banner() {
 
 func (p *Printer) ScanHeader(source string, content []byte) {
 	hash := fmt.Sprintf("%x", md5.Sum(content))
-	p.writeln(cDim("  source: %s  |  %d bytes  |  md5: %s…", source, len(content), hash[:12]))
+	p.writeln(cDim("  source: " + source + "  |  " + fmt.Sprintf("%d", len(content)) + " bytes  |  md5: " + hash[:12] + "…"))
 }
 
 func (p *Printer) AIHeader(model string) {

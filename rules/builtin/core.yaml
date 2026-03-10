@@ -61,7 +61,7 @@ rules:
     tags: [reverse_shell, network]
     match:
       mode: regex
-      pattern: 'python[23]?\s+-c\s+["\'].*socket.*connect'
+      pattern: "python[23]?\\s+-c\\s+[\"'].*socket.*connect"
       flags: [case_insensitive]
     remediation: "Python one-liner with socket.connect is a well-known reverse shell pattern."
 
@@ -72,7 +72,7 @@ rules:
     tags: [reverse_shell, network]
     match:
       mode: regex
-      pattern: 'php\s+-r\s+.*fsockopen'
+      pattern: "php\\s+-r\\s+.*fsockopen"
       flags: [case_insensitive]
 
   - id: core-007
@@ -82,7 +82,7 @@ rules:
     tags: [reverse_shell, network]
     match:
       mode: regex
-      pattern: 'perl\s+-e\s+.*socket'
+      pattern: "perl\\s+-e\\s+.*socket"
       flags: [case_insensitive]
     references:
       - https://gtfobins.github.io/gtfobins/perl/
@@ -183,7 +183,7 @@ rules:
     tags: [priv_esc, persistence]
     match:
       mode: regex
-      pattern: 'chmod\s+[u+]?[46]s\s+(/usr/bin/python|/usr/bin/perl|/bin/bash|/bin/sh|/usr/bin/ruby)'
+      pattern: "chmod\\s+[u+]?[46]s\\s+(/usr/bin/python|/usr/bin/perl|/bin/bash|/bin/sh|/usr/bin/ruby)"
       flags: [case_insensitive]
     remediation: "SUID on interpreters allows any user to run commands as root."
     references:
@@ -226,7 +226,7 @@ rules:
     tags: [credential_theft]
     match:
       mode: regex
-      pattern: '(cat|less|more|head|cp|curl|nc)\s+~?/\.ssh/(id_rsa|id_ed25519|id_ecdsa|id_dsa)(?!\.(pub))'
+      pattern: '(cat|less|more|head|cp|curl|nc)\s+~?/?(\.ssh/|root/\.ssh/|home/[^/]+/\.ssh/)(id_rsa|id_ed25519|id_ecdsa|id_dsa)\s*$'
 
   - id: core-022
     name: "AWS Credentials File Access"
@@ -283,6 +283,6 @@ rules:
     tags: [credential_exposure]
     match:
       mode: regex
-      pattern: '(password|passwd|secret|token|api_key|apikey)\s*=\s*["\'][^"'\'']{6,}["\']'
+      pattern: "(password|passwd|secret|token|api_key|apikey)\\s*=\\s*[\"'][^\"']{6,}[\"']"
       flags: [case_insensitive]
     remediation: "Credentials should not be hardcoded. Use environment variables or a secrets manager."
