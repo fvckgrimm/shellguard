@@ -1,0 +1,25 @@
+# Build output
+dist/
+*.exe
+*.test
+
+# Go
+vendor/
+go.sum
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+*.sarif
+*.out
+
+# Config (don't commit personal config)
+.shellguard/

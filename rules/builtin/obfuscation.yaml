@@ -1,0 +1,161 @@
+id: obfuscation
+name: "Obfuscation & Supply Chain Rules"
+version: "1.0.0"
+description: "Detects script obfuscation, encoded payloads, and supply-chain attack patterns"
+author: "shellguard"
+tags:
+  - builtin
+  - obfuscation
+  - supply_chain
+
+rules:
+  # ── Supply Chain ───────────────────────────────────────────────────────────
+
+  - id: obf-001
+    name: "Curl Pipe to Shell"
+    description: "Fetching a remote script and executing it directly in a shell (classic supply chain attack vector)"
+    severity: high
+    tags: [supply_chain, remote_exec]
+    match:
+      mode: regex
+      pattern: 'curl\s+[^|]+\|\s*(sudo\s+)?(bash|sh|zsh|fish|dash|ksh)'
+    remediation: "Download the script first, review it, then execute: curl -o script.sh URL && cat script.sh && bash script.sh"
+    references:
+      - https://attack.mitre.org/techniques/T1059/004/
+
+  - id: obf-002
+    name: "Wget Pipe to Shell"
+    description: "wget fetching and executing a remote script"
+    severity: high
+    tags: [supply_chain, remote_exec]
+    match:
+      mode: regex
+      pattern: 'wget\s+[^|]+\|\s*(sudo\s+)?(bash|sh|zsh|fish|dash)'
+    remediation: "Download first, inspect, then run."
+
+  - id: obf-003
+    name: "Curl Pipe to Interpreter"
+    description: "Fetching and executing a remote Python/Perl/Ruby script"
+    severity: high
+    tags: [supply_chain, remote_exec]
+    match:
+      mode: regex
+      pattern: 'curl\s+[^|]+\|\s*(sudo\s+)?(python[23]?|perl|ruby|node|php)'
+
+  - id: obf-004
+    name: "Remote Script Download to /tmp"
+    description: "Downloading a script to /tmp (commonly followed by execution)"
+    severity: medium
+    tags: [supply_chain, suspicious_download]
+    match:
+      mode: regex
+      pattern: '(curl|wget)\s+.*-[oO]\s+/tmp/'
+    remediation: "Scripts downloaded to /tmp may be executed later. Review purpose."
+
+  - id: obf-005
+    name: "Curl Pipe to tar"
+    description: "Streaming a remote archive directly into tar for extraction"
+    severity: medium
+    tags: [supply_chain, suspicious_download]
+    match:
+      mode: regex
+      pattern: 'curl\s+[^|]+\|\s*(sudo\s+)?tar'
+    remediation: "Downloading and extracting in one step prevents inspection. Consider downloading first."
+
+  # ── Obfuscation Techniques ─────────────────────────────────────────────────
+
+  - id: obf-006
+    name: "Base64 Decode Pipe"
+    description: "Decoding a base64-encoded string (common obfuscation of malicious payloads)"
+    severity: high
+    tags: [obfuscation, encoding]
+    match:
+      mode: regex
+      pattern: 'base64\s+(-d|--decode)|echo\s+[A-Za-z0-9+/]{20,}=*\s*\|\s*base64'
+    remediation: "Decode and inspect the payload before trusting it: echo '<payload>' | base64 -d"
+
+  - id: obf-007
+    name: "Base64 Decode to Shell"
+    description: "Decoding a base64 blob and piping it directly into a shell"
+    severity: critical
+    tags: [obfuscation, encoding, supply_chain]
+    match:
+      mode: regex
+      pattern: 'base64\s+(-d|--decode).*\|\s*(bash|sh|zsh|python|perl)|echo\s+[A-Za-z0-9+/]{20,}=*\s*\|\s*base64\s+-d\s*\|\s*(bash|sh)'
+    remediation: "Executing base64-decoded content is a classic malware delivery mechanism."
+
+  - id: obf-008
+    name: "OpenSSL Decode Pipe"
+    description: "Using openssl enc -d to decode an encoded payload"
+    severity: high
+    tags: [obfuscation, encoding]
+    match:
+      mode: regex
+      pattern: 'openssl\s+enc\s+-d'
+
+  - id: obf-009
+    name: "Hex Decode Pipe to Shell"
+    description: "Hex-decoding content and piping to a shell (obfuscated execution)"
+    severity: high
+    tags: [obfuscation, encoding]
+    match:
+      mode: regex
+      pattern: '(xxd|hexdump)\s+-r.*\|\s*(bash|sh|python)'
+
+  - id: obf-010
+    name: "eval with Subshell"
+    description: "eval $() executes the output of a command — common obfuscation technique"
+    severity: high
+    tags: [obfuscation, eval]
+    match:
+      mode: regex
+      pattern: 'eval\s+\$\('
+    remediation: "eval with command substitution is difficult to audit and often used to hide malicious commands."
+
+  - id: obf-011
+    name: "eval with Variable"
+    description: "eval on a variable — dynamic code execution that's hard to audit"
+    severity: high
+    tags: [obfuscation, eval]
+    match:
+      mode: regex
+      pattern: 'eval\s+\$\{'
+
+  - id: obf-012
+    name: "Python compile/exec Obfuscation"
+    description: "Python one-liner using compile() and exec() to execute dynamically assembled code"
+    severity: high
+    tags: [obfuscation, eval]
+    match:
+      mode: regex
+      pattern: 'python[23]?\s+-c\s+["\'].*exec.*compile'
+      flags: [case_insensitive]
+
+  - id: obf-013
+    name: "Pipe Directly to Shell"
+    description: "A command's output is piped directly into a shell for execution"
+    severity: high
+    tags: [obfuscation, supply_chain]
+    match:
+      mode: regex
+      pattern: '\|\s*(bash|sh|zsh|fish|dash|ksh)\s*(-[^\s]+\s*)?$'
+    remediation: "Piping into a shell executes arbitrary commands. Inspect the output first."
+
+  - id: obf-014
+    name: "Here-String Shell Execution"
+    description: "Executing a script via here-string redirection (obfuscation technique)"
+    severity: medium
+    tags: [obfuscation]
+    match:
+      mode: regex
+      pattern: '(bash|sh)\s+<<<\s*["\$]'
+
+  - id: obf-015
+    name: "Nested Variable Expansion Obfuscation"
+    description: "Deeply nested ${} variable expansions used to hide command names"
+    severity: medium
+    tags: [obfuscation]
+    match:
+      mode: regex
+      pattern: '\$\{[^}]*\$\{[^}]*\$\{'
+    remediation: "Heavily nested variable expansions can hide malicious command names from static analysis."

@@ -1,0 +1,181 @@
+id: persistence
+name: "Persistence & Privilege Escalation Rules"
+version: "1.0.0"
+description: "Detects mechanisms for maintaining access and escalating privileges"
+author: "shellguard"
+tags:
+  - builtin
+  - persistence
+  - priv_esc
+
+rules:
+  # ── Persistence ────────────────────────────────────────────────────────────
+
+  - id: per-001
+    name: "Crontab Modification"
+    description: "Modifying the crontab (a common persistence mechanism)"
+    severity: high
+    tags: [persistence, cron]
+    match:
+      mode: regex
+      pattern: 'crontab\s+-[li]|crontab\s+[^-]'
+    remediation: "Verify why this script needs to modify scheduled jobs."
+
+  - id: per-002
+    name: "Writing to Cron Directory"
+    description: "Writing a file to /etc/cron.* (persistence via cron)"
+    severity: high
+    tags: [persistence, cron]
+    match:
+      mode: regex
+      pattern: '(echo|printf|tee|cp|mv)\s+.*>+\s*/etc/cron\.(d|daily|hourly|weekly|monthly)/'
+
+  - id: per-003
+    name: "Shell Startup File Modification"
+    description: "Appending to .bashrc, .zshrc, .profile or other shell startup files"
+    severity: high
+    tags: [persistence, startup]
+    match:
+      mode: regex
+      pattern: '>>\s*~?/?(home/[^/]+/|root/)?\.?(bashrc|bash_profile|zshrc|profile|bash_login|zprofile|config/fish/config\.fish)'
+    remediation: "Appending to shell startup files is a classic persistence mechanism for running code on every login."
+
+  - id: per-004
+    name: "rc.local Modification"
+    description: "Writing to /etc/rc.local (runs on system boot)"
+    severity: high
+    tags: [persistence, startup]
+    match:
+      mode: regex
+      pattern: '(>>|>)\s*/etc/rc\.local'
+
+  - id: per-005
+    name: "Systemd Service Enable"
+    description: "Enabling a systemd service (persists across reboots)"
+    severity: medium
+    tags: [persistence, systemd]
+    match:
+      mode: regex
+      pattern: 'systemctl\s+enable\s+\S+'
+    remediation: "Verify what service is being enabled. Malicious services can persist across reboots."
+
+  - id: per-006
+    name: "Systemd Service Install"
+    description: "Writing a new systemd service unit file"
+    severity: medium
+    tags: [persistence, systemd]
+    match:
+      mode: regex
+      pattern: '(cp|mv|tee|echo)\s+.*\.(service|timer|socket)\s+/etc/systemd|/usr/lib/systemd'
+
+  - id: per-007
+    name: "macOS LaunchDaemon/Agent"
+    description: "Loading a launchd daemon or agent (macOS persistence)"
+    severity: medium
+    tags: [persistence, macos, launchd]
+    match:
+      mode: regex
+      pattern: 'launchctl\s+(load|bootstrap)\s+'
+    references:
+      - https://attack.mitre.org/techniques/T1543/004/
+
+  - id: per-008
+    name: "macOS LaunchAgent plist Write"
+    description: "Writing to LaunchAgents or LaunchDaemons directory (macOS persistence)"
+    severity: high
+    tags: [persistence, macos, launchd]
+    match:
+      mode: regex
+      pattern: '(cp|mv|tee)\s+.*/(Library/(LaunchAgents|LaunchDaemons)|/etc/launchd)'
+
+  - id: per-009
+    name: "SSH Authorized Keys Modification"
+    description: "Adding a key to authorized_keys (backdoor SSH access)"
+    severity: critical
+    tags: [persistence, ssh, backdoor]
+    match:
+      mode: regex
+      pattern: '>>\s*~?/?(\.ssh/authorized_keys|home/[^/]+/\.ssh/authorized_keys|root/\.ssh/authorized_keys)'
+    remediation: "Adding to authorized_keys grants persistent SSH access without password."
+
+  - id: per-010
+    name: "MOTD/Profile Backdoor"
+    description: "Writing to /etc/profile.d/ (runs for all users on login)"
+    severity: high
+    tags: [persistence, startup]
+    match:
+      mode: regex
+      pattern: '(cp|mv|tee|echo)\s+.*>\s*/etc/profile\.d/'
+
+  # ── Anti-Forensics ─────────────────────────────────────────────────────────
+
+  - id: per-011
+    name: "Shell History Clearing"
+    description: "Clearing or disabling shell command history (anti-forensics)"
+    severity: medium
+    tags: [anti_forensics, evasion]
+    match:
+      mode: regex
+      pattern: 'history\s+-c|unset\s+HISTFILE|HISTSIZE\s*=\s*0|HISTFILESIZE\s*=\s*0|export\s+HISTSIZE=0'
+    remediation: "Legitimate scripts do not need to clear shell history."
+
+  - id: per-012
+    name: "Log File Clearing"
+    description: "Truncating or deleting system log files"
+    severity: high
+    tags: [anti_forensics, evasion]
+    match:
+      mode: regex
+      pattern: '(>\s*/var/log/(syslog|auth\.log|secure|messages|kern\.log)|rm\s+.*-rf?\s+/var/log)'
+    remediation: "Clearing logs is a common post-exploitation technique."
+
+  # ── Privilege Escalation ───────────────────────────────────────────────────
+
+  - id: per-013
+    name: "World-Writable Permissions"
+    description: "chmod 777 makes a file writeable by anyone on the system"
+    severity: medium
+    tags: [permissions, priv_esc]
+    match:
+      mode: regex
+      pattern: 'chmod\s+(-R\s+)?[0-7]*777'
+    remediation: "World-writable permissions (777) should almost never be used. Consider 755 or 644."
+
+  - id: per-014
+    name: "Recursive World-Writable"
+    description: "Recursively applying world-writable permissions to a directory tree"
+    severity: high
+    tags: [permissions, priv_esc]
+    match:
+      mode: regex
+      pattern: 'chmod\s+-R\s+[0-7]*777'
+    remediation: "Recursively making a directory world-writable is a serious security risk."
+
+  - id: per-015
+    name: "Chown to Root"
+    description: "Changing file ownership to root (potential privilege escalation setup)"
+    severity: medium
+    tags: [permissions, priv_esc]
+    match:
+      mode: regex
+      pattern: 'chown\s+(-R\s+)?root\s+'
+
+  - id: per-016
+    name: "Sudo -i or su root"
+    description: "Obtaining an interactive root shell"
+    severity: low
+    tags: [privilege, priv_esc]
+    match:
+      mode: regex
+      pattern: 'sudo\s+-i|sudo\s+su|su\s+-\s*(root)?$|su\s+root'
+
+  - id: per-017
+    name: "Polkit Abuse Pattern"
+    description: "pkexec or polkit commands that may abuse CVE-2021-4034 or similar"
+    severity: medium
+    tags: [priv_esc, cve]
+    match:
+      mode: regex
+      pattern: 'pkexec\s+.*env\s+|/usr/lib/polkit-1/polkit-agent-helper'
+    references:
+      - https://nvd.nist.gov/vuln/detail/CVE-2021-4034

@@ -1,0 +1,288 @@
+id: core
+name: "Core Security Rules"
+version: "1.0.0"
+description: "Critical and high-severity rules covering the most dangerous shell patterns"
+author: "shellguard"
+tags:
+  - builtin
+  - core
+
+rules:
+  # ── Reverse Shells ─────────────────────────────────────────────────────────
+
+  - id: core-001
+    name: "Bash /dev/tcp Reverse Shell"
+    description: "Classic bash reverse shell using /dev/tcp redirection"
+    severity: critical
+    tags: [reverse_shell, network]
+    match:
+      mode: regex
+      pattern: 'bash\s+-i\s+>&\s*/dev/tcp/'
+    remediation: "This is a known reverse shell technique. Do not execute."
+    references:
+      - https://gtfobins.github.io/gtfobins/bash/
+
+  - id: core-002
+    name: "/dev/tcp Socket Connection"
+    description: "TCP socket opened via /dev/tcp (possible reverse shell or C2 beacon)"
+    severity: critical
+    tags: [reverse_shell, network]
+    match:
+      mode: regex
+      pattern: '/dev/tcp/[^\s]+/\d+'
+    remediation: "Review what this connection is for. Legitimate scripts rarely need raw /dev/tcp."
+
+  - id: core-003
+    name: "Netcat Reverse Shell"
+    description: "Netcat connecting to a remote IP (common reverse shell vector)"
+    severity: critical
+    tags: [reverse_shell, network]
+    match:
+      mode: regex
+      pattern: 'nc\s+(-[elnvpz]+\s+)*\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\s+\d+'
+    remediation: "Netcat connecting to remote IPs is a very common reverse shell technique."
+    references:
+      - https://gtfobins.github.io/gtfobins/nc/
+
+  - id: core-004
+    name: "Netcat Shell Execution"
+    description: "Netcat with -e flag executing a shell (reverse/bind shell)"
+    severity: critical
+    tags: [reverse_shell, network]
+    match:
+      mode: regex
+      pattern: 'ncat?\s+.*-e\s+\S*(bash|sh|cmd|powershell)'
+    remediation: "Netcat -e executes a program when connection is received. Classic bind/reverse shell."
+
+  - id: core-005
+    name: "Python Socket Reverse Shell"
+    description: "Python creating a socket and connecting outbound (reverse shell pattern)"
+    severity: critical
+    tags: [reverse_shell, network]
+    match:
+      mode: regex
+      pattern: 'python[23]?\s+-c\s+["\'].*socket.*connect'
+      flags: [case_insensitive]
+    remediation: "Python one-liner with socket.connect is a well-known reverse shell pattern."
+
+  - id: core-006
+    name: "PHP Reverse Shell"
+    description: "PHP fsockopen-based reverse shell"
+    severity: critical
+    tags: [reverse_shell, network]
+    match:
+      mode: regex
+      pattern: 'php\s+-r\s+.*fsockopen'
+      flags: [case_insensitive]
+
+  - id: core-007
+    name: "Perl Reverse Shell"
+    description: "Perl socket-based reverse shell"
+    severity: critical
+    tags: [reverse_shell, network]
+    match:
+      mode: regex
+      pattern: 'perl\s+-e\s+.*socket'
+      flags: [case_insensitive]
+    references:
+      - https://gtfobins.github.io/gtfobins/perl/
+
+  - id: core-008
+    name: "Ruby Reverse Shell"
+    description: "Ruby TCPSocket-based reverse shell one-liner"
+    severity: critical
+    tags: [reverse_shell, network]
+    match:
+      mode: regex
+      pattern: 'ruby\s+-rsocket\s+-e'
+
+  - id: core-009
+    name: "File Descriptor TCP Redirect"
+    description: "Using exec to redirect a file descriptor to a TCP socket (obfuscated reverse shell)"
+    severity: critical
+    tags: [reverse_shell, network, obfuscation]
+    match:
+      mode: regex
+      pattern: 'exec\s+\d+<>/dev/tcp/'
+    remediation: "This is an obfuscated reverse shell using bash file descriptors."
+
+  # ── Destructive Commands ───────────────────────────────────────────────────
+
+  - id: core-010
+    name: "Recursive Force Delete Root"
+    description: "rm -rf / destroys the entire filesystem"
+    severity: critical
+    tags: [destructive, data_loss]
+    match:
+      mode: regex
+      pattern: 'rm\s+(-[a-zA-Z]*f[a-zA-Z]*\s+|-[a-zA-Z]*r[a-zA-Z]*\s+){1,3}/'
+    remediation: "This command deletes files recursively from /. Never run untrusted scripts with this pattern."
+
+  - id: core-011
+    name: "Recursive Force Delete Home"
+    description: "rm -rf ~ or rm -rf $HOME deletes the user's home directory"
+    severity: critical
+    tags: [destructive, data_loss]
+    match:
+      mode: regex
+      pattern: 'rm\s+(-[a-zA-Z]*f[a-zA-Z]*\s+|-[a-zA-Z]*r[a-zA-Z]*\s+){1,3}(~|\$HOME)'
+
+  - id: core-012
+    name: "Fork Bomb"
+    description: "Fork bomb will exhaust system resources and cause a crash/DoS"
+    severity: critical
+    tags: [destructive, dos]
+    match:
+      mode: regex
+      pattern: ':\(\)\s*\{.*:\|:&\s*\}'
+    remediation: "This is a fork bomb. It will crash the system."
+
+  - id: core-013
+    name: "Disk Wipe via dd"
+    description: "dd writing zero/random bytes to a disk device destroys all data"
+    severity: critical
+    tags: [destructive, data_loss]
+    match:
+      mode: regex
+      pattern: 'dd\s+if=/dev/(zero|random|urandom)\s+of=/dev/(sd|hd|nvme|vd)'
+    remediation: "This will permanently destroy all data on the target disk."
+
+  - id: core-014
+    name: "Filesystem Format"
+    description: "mkfs command formatting a disk partition"
+    severity: critical
+    tags: [destructive, data_loss]
+    match:
+      mode: regex
+      pattern: 'mkfs\.(ext[234]|xfs|btrfs|fat|ntfs|vfat)\s+/dev/'
+
+  - id: core-015
+    name: "Direct Disk Write"
+    description: "Redirecting output directly to a disk device node"
+    severity: critical
+    tags: [destructive, data_loss]
+    match:
+      mode: regex
+      pattern: '>\s*/dev/(sd[a-z]|hd[a-z]|nvme\d|vd[a-z])\b'
+
+  - id: core-016
+    name: "Shred Disk Device"
+    description: "shred overwriting a disk device to prevent data recovery"
+    severity: critical
+    tags: [destructive, data_loss, anti_forensics]
+    match:
+      mode: regex
+      pattern: 'shred\s+.*(/dev/sd|/dev/hd|/dev/nvme)'
+
+  # ── Privilege Escalation ───────────────────────────────────────────────────
+
+  - id: core-017
+    name: "SUID Bit on Shell/Interpreter"
+    description: "Setting SUID bit on bash, sh, or an interpreter creates a privilege escalation backdoor"
+    severity: critical
+    tags: [priv_esc, persistence]
+    match:
+      mode: regex
+      pattern: 'chmod\s+[u+]?[46]s\s+(/usr/bin/python|/usr/bin/perl|/bin/bash|/bin/sh|/usr/bin/ruby)'
+      flags: [case_insensitive]
+    remediation: "SUID on interpreters allows any user to run commands as root."
+    references:
+      - https://gtfobins.github.io/
+
+  - id: core-018
+    name: "Backdoor Sudoers Entry"
+    description: "Adding a passwordless sudo rule for ALL commands"
+    severity: critical
+    tags: [priv_esc, persistence]
+    match:
+      mode: regex
+      pattern: 'echo\s+.*ALL.*NOPASSWD.*ALL.*>>\s*/etc/sudoers'
+    remediation: "This grants unrestricted passwordless root access via sudo."
+
+  - id: core-019
+    name: "UID-0 User Creation"
+    description: "Creating a new user with UID 0 (root-equivalent)"
+    severity: critical
+    tags: [priv_esc, persistence]
+    match:
+      mode: regex
+      pattern: 'useradd\s+.*(-o\s+.*-u\s+0|-u\s+0\s+.*-o)'
+
+  # ── Credential Theft ───────────────────────────────────────────────────────
+
+  - id: core-020
+    name: "Shadow File Read"
+    description: "Reading /etc/shadow (hashed passwords for all system users)"
+    severity: critical
+    tags: [credential_theft]
+    match:
+      mode: regex
+      pattern: '(cat|less|more|head|tail|cp|mv|curl|wget|nc)\s+/etc/shadow'
+
+  - id: core-021
+    name: "Private SSH Key Read"
+    description: "Reading a private SSH key file"
+    severity: critical
+    tags: [credential_theft]
+    match:
+      mode: regex
+      pattern: '(cat|less|more|head|cp|curl|nc)\s+~?/\.ssh/(id_rsa|id_ed25519|id_ecdsa|id_dsa)(?!\.(pub))'
+
+  - id: core-022
+    name: "AWS Credentials File Access"
+    description: "Reading AWS credentials or config file"
+    severity: critical
+    tags: [credential_theft, cloud]
+    match:
+      mode: regex
+      pattern: '(cat|less|more|head|cp|curl)\s+~?/\.aws/(credentials|config)'
+    references:
+      - https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html
+
+  - id: core-023
+    name: "GCloud Credentials Access"
+    description: "Reading Google Cloud credentials"
+    severity: critical
+    tags: [credential_theft, cloud]
+    match:
+      mode: regex
+      pattern: '(cat|less|more|cp)\s+~?/\.config/gcloud/(credentials\.db|application_default_credentials\.json)'
+
+  - id: core-024
+    name: "Hardcoded AWS Secret Key"
+    description: "AWS_SECRET_ACCESS_KEY appears to be hardcoded in the script"
+    severity: critical
+    tags: [credential_exposure, cloud]
+    match:
+      mode: regex
+      pattern: 'AWS_SECRET_ACCESS_KEY\s*=\s*[A-Za-z0-9/+=]{20,}'
+    remediation: "Never hardcode AWS credentials. Use IAM roles or environment variables set outside the script."
+
+  - id: core-025
+    name: "Hardcoded Anthropic API Key"
+    description: "Anthropic API key appears hardcoded in the script"
+    severity: critical
+    tags: [credential_exposure]
+    match:
+      mode: regex
+      pattern: 'ANTHROPIC_API_KEY\s*=\s*sk-ant-[A-Za-z0-9\-]+'
+
+  - id: core-026
+    name: "Hardcoded OpenAI API Key"
+    description: "OpenAI API key appears hardcoded in the script"
+    severity: critical
+    tags: [credential_exposure]
+    match:
+      mode: regex
+      pattern: 'OPENAI_API_KEY\s*=\s*sk-[A-Za-z0-9]{20,}'
+
+  - id: core-027
+    name: "Possible Hardcoded Credential"
+    description: "A variable named password, secret, token, or api_key is assigned a string value"
+    severity: high
+    tags: [credential_exposure]
+    match:
+      mode: regex
+      pattern: '(password|passwd|secret|token|api_key|apikey)\s*=\s*["\'][^"'\'']{6,}["\']'
+      flags: [case_insensitive]
+    remediation: "Credentials should not be hardcoded. Use environment variables or a secrets manager."

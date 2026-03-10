@@ -1,0 +1,110 @@
+id: community-k8s
+name: "Kubernetes Security Rules"
+version: "0.1.0"
+description: "Community rules for detecting dangerous Kubernetes and container security patterns"
+author: "community"
+tags:
+  - community
+  - kubernetes
+  - containers
+
+rules:
+  - id: k8s-001
+    name: "kubectl exec Shell"
+    description: "Opening an interactive shell in a running pod"
+    severity: medium
+    tags: [kubernetes, lateral_movement]
+    match:
+      mode: regex
+      pattern: 'kubectl\s+exec\s+.*(-it?|--stdin|--tty).*\s+--\s*(bash|sh|/bin/bash|/bin/sh)'
+    remediation: "Interactive shells in pods may indicate unauthorized access or debugging. Review context."
+
+  - id: k8s-002
+    name: "Privileged Pod Creation"
+    description: "Creating a pod with privileged security context (host namespace access)"
+    severity: critical
+    tags: [kubernetes, priv_esc, containers]
+    match:
+      mode: multi_regex
+      logic: all
+      patterns:
+        - 'kubectl\s+(run|apply|create)'
+        - 'privileged:\s*true'
+
+  - id: k8s-003
+    name: "HostPath Mount"
+    description: "Mounting a host filesystem path into a container (container escape vector)"
+    severity: high
+    tags: [kubernetes, container_escape]
+    match:
+      mode: multi_regex
+      logic: all
+      patterns:
+        - 'hostPath:'
+        - 'path:\s*/'
+    references:
+      - https://attack.mitre.org/techniques/T1611/
+
+  - id: k8s-004
+    name: "Cluster Admin Binding"
+    description: "Creating a ClusterRoleBinding to cluster-admin (full cluster access)"
+    severity: critical
+    tags: [kubernetes, priv_esc, rbac]
+    match:
+      mode: multi_regex
+      logic: all
+      patterns:
+        - 'ClusterRoleBinding'
+        - 'cluster-admin'
+    remediation: "cluster-admin grants unrestricted access to all resources. Use least-privilege roles instead."
+
+  - id: k8s-005
+    name: "kubectl --privileged Flag"
+    description: "Running kubectl commands with --overrides setting privileged mode"
+    severity: high
+    tags: [kubernetes, priv_esc]
+    match:
+      mode: regex
+      pattern: 'kubectl\s+run\s+.*--overrides.*privileged.*true'
+
+  - id: k8s-006
+    name: "Deleting All Pods/Deployments"
+    description: "Mass deletion of Kubernetes resources"
+    severity: high
+    tags: [kubernetes, destructive]
+    match:
+      mode: regex
+      pattern: 'kubectl\s+delete\s+(pods?|deployments?|all)\s+(--all|-l\s+\S+)\s*(-n\s+(default|kube-system|production))'
+
+  - id: k8s-007
+    name: "Docker Socket Mount"
+    description: "Mounting /var/run/docker.sock inside a container (container escape)"
+    severity: critical
+    tags: [containers, container_escape, priv_esc]
+    match:
+      mode: regex
+      pattern: '/var/run/docker\.sock'
+    remediation: "Mounting the Docker socket gives full Docker daemon access, enabling container escape to host."
+    references:
+      - https://attack.mitre.org/techniques/T1552/007/
+
+  - id: k8s-008
+    name: "docker --privileged"
+    description: "Running a Docker container with --privileged flag (full host access)"
+    severity: critical
+    tags: [containers, container_escape, priv_esc]
+    match:
+      mode: regex
+      pattern: 'docker\s+run\s+.*--privileged'
+    remediation: "A privileged container has nearly full access to the host kernel. Avoid in production."
+
+  - id: k8s-009
+    name: "nsenter to Host"
+    description: "Using nsenter to enter host namespaces from within a container (container escape)"
+    severity: critical
+    tags: [containers, container_escape]
+    match:
+      mode: regex
+      pattern: 'nsenter\s+.*--target\s+1|nsenter\s+-t\s+1'
+    references:
+      - https://gtfobins.github.io/gtfobins/nsenter/
