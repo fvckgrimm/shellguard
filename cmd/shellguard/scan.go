@@ -69,6 +69,9 @@ func init() {
 	f.BoolP("non-interactive", "n", false, "Never prompt; exit 0=clean, 1=risky, 2=error")
 	f.Bool("passthrough", false, "Write content to stdout if approved (pipe-gate mode)")
 	f.Bool("no-recurse", false, "Disable recursive file reference scanning")
+	f.Bool("no-fetch", false, "Disable fetching remote scripts referenced via curl|bash / wget|bash")
+	f.StringSlice("allow-hosts", nil, "Only fetch remote scripts from these hosts (e.g. get.docker.com)")
+	f.StringSlice("block-hosts", nil, "Never fetch remote scripts from these hosts")
 	f.Int("depth", 5, "Max recursion depth for referenced files")
 
 	// AI
@@ -137,6 +140,9 @@ func runScan(cmd *cobra.Command, args []string) error {
 	minSeverity, _ := flags.GetString("severity")
 	depth, _ := flags.GetInt("depth")
 	noRecurse, _ := flags.GetBool("no-recurse")
+	noFetch, _ := flags.GetBool("no-fetch")
+	allowHosts, _ := flags.GetStringSlice("allow-hosts")
+	blockHosts, _ := flags.GetStringSlice("block-hosts")
 	format, _ := flags.GetString("format")
 	outFile, _ := flags.GetString("output")
 	passthrough, _ := flags.GetBool("passthrough")
@@ -230,7 +236,12 @@ func runScan(cmd *cobra.Command, args []string) error {
 
 	// ── Resolve referenced files (recursive scan) ───────────────────────────
 	if !noRecurse {
-		refResults := resolver.ScanRefs(string(content), sourceLabel, scanOpts, depth)
+		fetchOpts := resolver.FetchOptions{
+			NoFetch:    noFetch,
+			AllowHosts: allowHosts,
+			BlockHosts: blockHosts,
+		}
+		refResults := resolver.ScanRefsWithOptions(string(content), sourceLabel, scanOpts, depth, fetchOpts)
 		for _, r := range refResults {
 			report.Merge(r)
 		}
