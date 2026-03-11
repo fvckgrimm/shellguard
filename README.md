@@ -185,6 +185,7 @@ Rules are YAML files loaded from:
 | `persistence` | 17 | Cron jobs, startup files, SSH backdoors, anti-forensics |
 | `prompt-injection` | 15 | AI prompt injection, jailbreaks, unicode smuggling, false safety claims |
 | `network-credentials` | 17 | Hardcoded secrets, recon, exfiltration, cloud metadata abuse |
+| `cryptojacking` | 19 | Cryptominer detection, wallet theft, seed phrases, AI agent crypto manipulation |
 
 ### Community packs
 

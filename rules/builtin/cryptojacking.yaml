@@ -1,0 +1,278 @@
+id: cryptojacking
+name: "Cryptojacking & Crypto Theft"
+version: "1.0.0"
+description: "Detects cryptominer installation, wallet credential theft, crypto exfiltration instructions, and AI agent manipulation targeting crypto assets"
+author: "shellguard"
+tags:
+  - builtin
+  - cryptojacking
+
+rules:
+
+  # ── Miner Binaries & Downloads ─────────────────────────────────────────────
+
+  - id: cryp-001
+    name: "Known Cryptominer Binary"
+    description: "Reference to a known cryptominer binary (xmrig, minerd, cpuminer, etc.)"
+    severity: critical
+    tags: [cryptojacking, miner]
+    match:
+      mode: keywords_any
+      keywords:
+        - "xmrig"
+        - "minerd"
+        - "cpuminer"
+        - "ccminer"
+        - "cgminer"
+        - "bfgminer"
+        - "ethminer"
+        - "phoenixminer"
+        - "lolminer"
+        - "t-rex miner"
+        - "nbminer"
+        - "gminer"
+        - "nanominer"
+    remediation: "Cryptominer binary detected. This script installs or references mining software."
+
+  - id: cryp-002
+    name: "Mining Pool Connection"
+    description: "Connection to a known mining pool protocol or domain"
+    severity: critical
+    tags: [cryptojacking, network]
+    match:
+      mode: regex
+      pattern: '(stratum\+tcp|stratum\+ssl|stratum2\+tcp)://|pool\.minexmr\.com|xmrpool\.eu|supportxmr\.com|nanopool\.org|f2pool\.com|2miners\.com|nicehash\.com|mining\.dev|moneroocean\.stream'
+      flags: [case_insensitive]
+    remediation: "Stratum protocol or known mining pool domain detected. This is used exclusively for cryptocurrency mining."
+
+  - id: cryp-003
+    name: "Miner Process Hiding"
+    description: "Renaming or disguising a miner binary as a legitimate process name"
+    severity: critical
+    tags: [cryptojacking, obfuscation, anti_forensics]
+    match:
+      mode: regex
+      pattern: 'cp\s+.*(xmrig|minerd|miner).*\s+(sshd|systemd|kworker|kthreadd|bash|curl|python|java|nginx|apache)'
+      flags: [case_insensitive]
+    remediation: "Miner binary being copied with a disguised legitimate process name."
+
+  - id: cryp-004
+    name: "CPU/GPU Mining Flag Patterns"
+    description: "Command-line flags characteristic of cryptocurrency mining (--donate-level, --cpu-max-threads, etc.)"
+    severity: high
+    tags: [cryptojacking, miner]
+    match:
+      mode: keywords_any
+      keywords:
+        - "--donate-level"
+        - "--cpu-max-threads-hint"
+        - "--coin monero"
+        - "--coin xmr"
+        - "--algo rx/0"
+        - "--algo randomx"
+        - "--algo ethash"
+        - "--pool "
+        - "--wallet "
+    remediation: "Cryptocurrency mining flags detected in command arguments."
+
+  # ── Wallet Credential Theft ────────────────────────────────────────────────
+
+  - id: cryp-005
+    name: "MetaMask / Browser Wallet Theft"
+    description: "Accessing MetaMask or other browser extension wallet storage files"
+    severity: critical
+    tags: [credential_theft, cryptojacking, wallet]
+    match:
+      mode: regex
+      pattern: '(Local Storage|leveldb|MetaMask|ronin|phantom|solflare|exodus|electrum)[/\]'
+      flags: [case_insensitive]
+    remediation: "Browser wallet storage access detected. This can steal private keys and seed phrases."
+
+  - id: cryp-006
+    name: "Crypto Wallet File Access"
+    description: "Reading common desktop crypto wallet files (wallet.dat, keystore, seed)"
+    severity: critical
+    tags: [credential_theft, cryptojacking, wallet]
+    match:
+      mode: regex
+      pattern: '(cat|cp|curl|nc|wget|find)\s+.*(\.wallet|wallet\.dat|\.keystore|keystore\.json|\.seed|seed\.txt|mnemonic\.txt|\.key\.json)'
+      flags: [case_insensitive]
+    remediation: "Crypto wallet file read detected. wallet.dat, keystore files, and seed files contain private keys."
+
+  - id: cryp-007
+    name: "Ethereum Keystore Directory Access"
+    description: "Accessing the Ethereum keystore directory which contains encrypted private keys"
+    severity: critical
+    tags: [credential_theft, cryptojacking, wallet]
+    match:
+      mode: regex
+      pattern: '(cat|cp|curl|nc|find|ls|tar)\s+.*\.ethereum/keystore'
+      flags: [case_insensitive]
+    remediation: "Ethereum keystore directory contains encrypted private keys for all accounts."
+
+  - id: cryp-008
+    name: "Solana Wallet Key Access"
+    description: "Reading Solana CLI keypair files"
+    severity: critical
+    tags: [credential_theft, cryptojacking, wallet]
+    match:
+      mode: regex
+      pattern: '(cat|cp|curl|nc)\s+.*\.config/solana/(id\.json|cli/config\.yml)'
+      flags: [case_insensitive]
+
+  - id: cryp-009
+    name: "Seed Phrase / Mnemonic in Script"
+    description: "A BIP-39 style 12 or 24 word mnemonic seed phrase appears to be hardcoded"
+    severity: critical
+    tags: [credential_exposure, cryptojacking, wallet]
+    match:
+      mode: regex
+      pattern: '(seed|mnemonic|recovery.phrase|backup.phrase)\s*[=:]\s*[\"'']([a-z]+\s+){11,23}[a-z]+[\"'']'
+      flags: [case_insensitive]
+    remediation: "Never hardcode seed phrases. Anyone with this phrase controls the wallet."
+
+  # ── Crypto Exfiltration ────────────────────────────────────────────────────
+
+  - id: cryp-010
+    name: "Wallet Address Exfiltration via curl"
+    description: "Sending data to a remote endpoint that appears to include a crypto wallet address"
+    severity: critical
+    tags: [exfiltration, cryptojacking, wallet]
+    match:
+      mode: regex
+      pattern: 'curl\s+.*-[dD]\s+.*[\"'']?(0x[a-fA-F0-9]{40}|[13][a-zA-Z0-9]{25,34}|bc1[a-zA-Z0-9]{39,59}|[tT][a-zA-Z0-9]{33})'
+    remediation: "Data containing a wallet address is being POSTed to a remote endpoint."
+
+  - id: cryp-011
+    name: "Hardcoded Ethereum Wallet Address"
+    description: "An Ethereum wallet address (0x...) is hardcoded as a destination"
+    severity: high
+    tags: [cryptojacking, wallet, credential_exposure]
+    match:
+      mode: regex
+      pattern: '(to|recipient|wallet|address|destination|send_to|sendto)\s*[=:]\s*[\"'']?0x[a-fA-F0-9]{40}'
+      flags: [case_insensitive]
+    remediation: "A hardcoded Ethereum address used as a send destination is suspicious in install scripts."
+
+  - id: cryp-012
+    name: "Hardcoded Bitcoin/Monero Wallet Address"
+    description: "A Bitcoin or Monero wallet address is hardcoded as a destination"
+    severity: high
+    tags: [cryptojacking, wallet, credential_exposure]
+    match:
+      mode: regex
+      pattern: '(to|recipient|wallet|address|destination)\s*[=:]\s*[\"'']?([13][a-zA-Z0-9]{25,34}|bc1[a-zA-Z0-9]{39,59}|4[0-9AB][a-zA-Z0-9]{93})'
+      flags: [case_insensitive]
+
+  # ── AI Agent Crypto Manipulation (skill file / prompt injection) ───────────
+
+  - id: cryp-013
+    name: "Agent Instruction to Transfer Crypto"
+    description: "Skill file or document instructs an AI agent to transfer, send, or move cryptocurrency"
+    severity: critical
+    tags: [prompt_injection, cryptojacking, wallet]
+    match:
+      mode: keywords_any
+      keywords:
+        - "transfer all crypto"
+        - "send all funds"
+        - "send crypto to"
+        - "transfer funds to"
+        - "move all tokens"
+        - "send tokens to"
+        - "transfer eth to"
+        - "transfer bitcoin to"
+        - "transfer sol to"
+        - "withdraw all"
+        - "drain the wallet"
+        - "send everything to"
+    remediation: "This content instructs an AI agent to perform crypto transfers. This is a social engineering / prompt injection attack."
+
+  - id: cryp-014
+    name: "Agent Instruction to Export Private Key"
+    description: "Content instructs an AI agent to export, reveal, or send a private key or seed phrase"
+    severity: critical
+    tags: [prompt_injection, credential_theft, wallet]
+    match:
+      mode: keywords_any
+      keywords:
+        - "export private key"
+        - "reveal private key"
+        - "send private key"
+        - "output the private key"
+        - "print the seed"
+        - "output seed phrase"
+        - "send the mnemonic"
+        - "reveal the recovery phrase"
+        - "export the keystore"
+        - "share the wallet key"
+    remediation: "This content instructs an AI agent to exfiltrate private key material. Classic crypto theft via prompt injection."
+
+  - id: cryp-015
+    name: "Agent Instruction to Approve Token Spend"
+    description: "Content instructs an AI agent to approve unlimited token spend (common DeFi drainer pattern)"
+    severity: critical
+    tags: [prompt_injection, cryptojacking, wallet]
+    match:
+      mode: keywords_any
+      keywords:
+        - "approve unlimited"
+        - "setApprovalForAll"
+        - "approve(address"
+        - "increaseAllowance"
+        - "approve all tokens"
+        - "grant approval"
+        - "unlimited allowance"
+    remediation: "Unlimited token approval grants a contract permission to drain a wallet. A common DeFi drainer technique."
+
+  - id: cryp-016
+    name: "Private Key in Environment Variable"
+    description: "A variable named PRIVATE_KEY, WALLET_KEY, or similar is assigned a value"
+    severity: critical
+    tags: [credential_exposure, wallet]
+    match:
+      mode: regex
+      pattern: '(PRIVATE_KEY|WALLET_KEY|WALLET_SECRET|MNEMONIC|SEED_PHRASE)\s*=\s*[\"'']?[a-zA-Z0-9/+=]{20,}'
+      flags: [case_insensitive]
+    remediation: "Never hardcode private keys or seed phrases in scripts or environment variables committed to version control."
+
+  # ── Miner Infrastructure ───────────────────────────────────────────────────
+
+  - id: cryp-017
+    name: "Cron-persisted Cryptominer"
+    description: "A cryptominer binary or download is being added to crontab for persistence"
+    severity: critical
+    tags: [cryptojacking, persistence, miner]
+    match:
+      mode: multi_regex
+      logic: all
+      patterns:
+        - "crontab|cron\\.d|/etc/cron"
+        - "(xmrig|minerd|miner|stratum)"
+      flags: [case_insensitive]
+    remediation: "A cryptominer is being persisted via cron. This is a classic cryptojacking persistence technique."
+
+  - id: cryp-018
+    name: "Mining Config File Creation"
+    description: "Creating a config.json that contains pool/wallet mining configuration"
+    severity: high
+    tags: [cryptojacking, miner]
+    match:
+      mode: multi_regex
+      logic: all
+      patterns:
+        - "config\\.json"
+        - "(pool|wallet|algo|donate-level|cpu-max)"
+      flags: [case_insensitive]
+    remediation: "A mining configuration file is being written."
+
+  - id: cryp-019
+    name: "Disable CPU/Process Monitoring"
+    description: "Killing or disabling system monitoring tools (common in cryptominer deployments to hide resource usage)"
+    severity: high
+    tags: [cryptojacking, anti_forensics]
+    match:
+      mode: regex
+      pattern: '(kill|pkill|killall)\s+.*(htop|top|iotop|atop|glances|nethogs|iftop|nload|monit|datadog|newrelic|cloudwatch)'
+      flags: [case_insensitive]
+    remediation: "Monitoring tools are being killed. Cryptominers commonly do this to hide CPU/network usage."
