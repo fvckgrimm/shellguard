@@ -1,5 +1,7 @@
 # 🛡 shellguard
 
+vibecoded security SLOP
+
 **Script and command security scanner for the agentic AI era.**
 
 shellguard is a CLI security scanner that sits between `curl` (or any content source) and `bash` — scanning scripts, one-liners, and AI skill files for dangerous patterns before they execute. Written in Go, rule packs are YAML-based and fully extensible (inspired by [Nuclei](https://github.com/projectdiscovery/nuclei) templates).
