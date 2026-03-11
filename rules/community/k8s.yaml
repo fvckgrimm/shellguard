@@ -82,8 +82,11 @@ rules:
     severity: critical
     tags: [containers, container_escape, priv_esc]
     match:
-      mode: regex
-      pattern: '/var/run/docker\.sock'
+      mode: multi_regex
+      logic: all
+      patterns:
+        - '/var/run/docker\.sock'
+        - '(-v\s+|--volume\s+|--mount\s+|volumeMounts:|hostPath:)'
     remediation: "Mounting the Docker socket gives full Docker daemon access, enabling container escape to host."
     references:
       - https://attack.mitre.org/techniques/T1552/007/

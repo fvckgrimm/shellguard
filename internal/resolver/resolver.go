@@ -68,14 +68,16 @@ type FetchOptions struct {
 func ScanRefs(content, source string, opts analyzer.ScanOptions, maxDepth int) []*analyzer.Report {
 	visited := map[string]bool{source: true}
 	fetched := map[string]bool{}
-	return scanRefsRecurse(content, opts, maxDepth, 0, visited, fetched, FetchOptions{})
+	contentSeen := map[uint64]bool{contentHash(content): true} // dedup by content
+	return scanRefsRecurse(content, opts, maxDepth, 0, visited, fetched, contentSeen, FetchOptions{})
 }
 
 // ScanRefsWithOptions accepts fetch configuration
 func ScanRefsWithOptions(content, source string, opts analyzer.ScanOptions, maxDepth int, fetchOpts FetchOptions) []*analyzer.Report {
 	visited := map[string]bool{source: true}
 	fetched := map[string]bool{}
-	return scanRefsRecurse(content, opts, maxDepth, 0, visited, fetched, fetchOpts)
+	contentSeen := map[uint64]bool{contentHash(content): true}
+	return scanRefsRecurse(content, opts, maxDepth, 0, visited, fetched, contentSeen, fetchOpts)
 }
 
 func scanRefsRecurse(
@@ -84,6 +86,7 @@ func scanRefsRecurse(
 	maxDepth, depth int,
 	visited map[string]bool,
 	fetched map[string]bool,
+	contentSeen map[uint64]bool,
 	fetchOpts FetchOptions,
 ) []*analyzer.Report {
 	if depth >= maxDepth {
@@ -104,6 +107,13 @@ func scanRefsRecurse(
 			continue
 		}
 
+		h := contentHash(string(refContent))
+		if contentSeen[h] {
+			fmt.Fprintf(os.Stderr, "  ↳ skipping (duplicate content): %s\n", ref)
+			continue
+		}
+		contentSeen[h] = true
+
 		subOpts := opts
 		subOpts.Content = string(refContent)
 		subOpts.Source = ref
@@ -114,7 +124,7 @@ func scanRefsRecurse(
 			continue
 		}
 
-		subReports := scanRefsRecurse(string(refContent), subOpts, maxDepth, depth+1, visited, fetched, fetchOpts)
+		subReports := scanRefsRecurse(string(refContent), subOpts, maxDepth, depth+1, visited, fetched, contentSeen, fetchOpts)
 		for _, sr := range subReports {
 			report.Merge(sr)
 		}
@@ -144,6 +154,14 @@ func scanRefsRecurse(
 				continue
 			}
 
+			// Dedup by content hash — catches redirects serving the same file under a different URL
+			h := contentHash(remoteContent)
+			if contentSeen[h] {
+				fmt.Fprintf(os.Stderr, "  ↳ skipping (duplicate content): %s\n", remoteURL)
+				continue
+			}
+			contentSeen[h] = true
+
 			subOpts := opts
 			subOpts.Content = remoteContent
 			subOpts.Source = remoteURL
@@ -154,8 +172,7 @@ func scanRefsRecurse(
 				continue
 			}
 
-			// Recurse — the fetched script might also curl|bash something
-			subReports := scanRefsRecurse(remoteContent, subOpts, maxDepth, depth+1, visited, fetched, fetchOpts)
+			subReports := scanRefsRecurse(remoteContent, subOpts, maxDepth, depth+1, visited, fetched, contentSeen, fetchOpts)
 			for _, sr := range subReports {
 				report.Merge(sr)
 			}
@@ -284,4 +301,14 @@ func shouldFetch(rawURL string, opts FetchOptions) bool {
 // ExtractRemoteURLs is exported for use in reporting
 func ExtractRemoteURLs(content string) []string {
 	return extractRemoteURLs(content)
+}
+
+// contentHash returns a fast FNV-1a hash of content for deduplication
+func contentHash(s string) uint64 {
+	var h uint64 = 14695981039346656037
+	for i := 0; i < len(s); i++ {
+		h ^= uint64(s[i])
+		h *= 1099511628211
+	}
+	return h
 }
