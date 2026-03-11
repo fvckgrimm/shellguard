@@ -78,15 +78,12 @@ rules:
 
   - id: k8s-007
     name: "Docker Socket Mount"
-    description: "Mounting /var/run/docker.sock inside a container (container escape)"
+    description: "Mounting /var/run/docker.sock as a volume into a container (container escape)"
     severity: critical
     tags: [containers, container_escape, priv_esc]
     match:
-      mode: multi_regex
-      logic: all
-      patterns:
-        - '/var/run/docker\.sock'
-        - '(-v\s+|--volume\s+|--mount\s+|volumeMounts:|hostPath:)'
+      mode: regex
+      pattern: '(\s-v\s+/var/run/docker\.sock|--volume\s+/var/run/docker\.sock|/var/run/docker\.sock:.*--volume|hostPath:\s*/var/run/docker\.sock)'
     remediation: "Mounting the Docker socket gives full Docker daemon access, enabling container escape to host."
     references:
       - https://attack.mitre.org/techniques/T1552/007/

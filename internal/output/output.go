@@ -278,7 +278,7 @@ func (p *Printer) Verdict(verdict engine.Verdict, report *analyzer.Report) {
 		p.writeln(cBgRed("  🚨  CRITICAL RISK — NOT RECOMMENDED  "))
 		p.writeln(cRedPlain("  Patterns strongly associated with malicious activity detected."))
 		if report.AIResult != nil && report.AIResult.Summary != "" {
-			p.writeln(cRedPlain("  AI: %s", report.AIResult.Summary))
+			p.writeln("  "+cRedPlain("AI:")+" %s", report.AIResult.Summary)
 		}
 
 	case engine.VerdictHigh:
@@ -300,7 +300,7 @@ func (p *Printer) Verdict(verdict engine.Verdict, report *analyzer.Report) {
 		p.writeln("")
 		p.writeln(cBgGreen("  ✓   NO SIGNIFICANT RISKS DETECTED  "))
 		if report.AIResult != nil && report.AIResult.Summary != "" {
-			p.writeln(cGreen("  AI: %s", report.AIResult.Summary))
+			p.writeln("  "+cGreen("AI:")+" %s", report.AIResult.Summary)
 		}
 	}
 }
@@ -441,7 +441,7 @@ func (p *Printer) reportSARIF(report *analyzer.Report) error {
 				"tool": map[string]interface{}{
 					"driver": map[string]interface{}{
 						"name":           "shellguard",
-						"informationUri": "https://github.com/fvckgrimm/shellguard",
+						"informationUri": "https://github.com/shellguard/shellguard",
 					},
 				},
 				"results": results,

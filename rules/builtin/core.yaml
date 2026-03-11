@@ -109,16 +109,13 @@ rules:
   # ── Destructive Commands ───────────────────────────────────────────────────
 
   - id: core-010
-    name: "Recursive Force Delete of Root or Critical Path"
-    description: "rm -rf targeting /, /tmp, /var, /home, /root, /etc, /usr — broad destructive delete"
+    name: "Recursive Force Delete of Critical Path"
+    description: "rm with both recursive and force flags targeting a critical system path or root"
     severity: critical
     tags: [destructive, data_loss]
     match:
-      mode: multi_regex
-      logic: all
-      patterns:
-        - 'rm\s+(-[a-zA-Z]*r[a-zA-Z]*\s+|-[a-zA-Z]*f[a-zA-Z]*\s+){1,3}'
-        - 'rm\s+.+(\s+|"|'')(/\s*$|/tmp\b|/var\b|/home\b|/root\b|/etc\b|/usr\b|~\b|\$HOME\b|\$\{HOME\})'
+      mode: regex
+      pattern: 'rm\s+(-[a-zA-Z]*r[a-zA-Z]*f[a-zA-Z]*|-[a-zA-Z]*f[a-zA-Z]*r[a-zA-Z]*|(-r\s+-f|-f\s+-r))\s+(\/\s*$|\/\s|\/(tmp|var|home|root|usr|etc)(\s|$)|~\s*$|~\/|\$HOME(\s|$)|\$\{HOME\})'
     remediation: "Recursive force delete of a critical system path detected."
 
   - id: core-011
