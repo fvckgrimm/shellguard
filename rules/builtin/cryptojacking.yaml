@@ -83,9 +83,16 @@ rules:
     severity: critical
     tags: [credential_theft, cryptojacking, wallet]
     match:
-      mode: regex
-      pattern: '(Local Storage|leveldb|MetaMask|ronin|phantom|solflare|exodus|electrum)[/\]'
-      flags: [case_insensitive]
+      mode: keywords_any
+      keywords:
+        - "MetaMask"
+        - "ronin/Local Storage"
+        - "phantom/Local Storage"
+        - "solflare/Local Storage"
+        - "exodus/Local Storage"
+        - "electrum/wallets"
+        - "metamask/Local Storage"
+        - "metamask/leveldb"
     remediation: "Browser wallet storage access detected. This can steal private keys and seed phrases."
 
   - id: cryp-006
